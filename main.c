@@ -162,10 +162,10 @@ int init_camera(int fd)
  
 	/*set the form of camera capture data*/
 	tv_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;      /*v4l2_buf_typea,camera must use V4L2_BUF_TYPE_VIDEO_CAPTURE*/
-	tv_fmt.fmt.pix.width = 720;
+	tv_fmt.fmt.pix.width = 640;
 	tv_fmt.fmt.pix.height = 480;
 	//tv_fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;	/*V4L2_PIX_FMT_YYUV*/
-	tv_fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_NV12;	/*V4L2_PIX_FMT_YYUV*/
+	tv_fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;	/*V4L2_PIX_FMT_YYUV*/
 	tv_fmt.fmt.pix.field = V4L2_FIELD_NONE;   		/*V4L2_FIELD_NONE*/
 	if (ioctl(fd, VIDIOC_S_FMT, &tv_fmt)< 0) 
 	{
@@ -212,24 +212,9 @@ int start_capture(int fd)
 }
  
  
-int process_image(void *addr, int length)
-{
-	FILE *fp;
- 
-	static int num = 0;
- 
-	char image_name[20];
-	sprintf(image_name, JPG, num++);
-	if((fp = fopen(image_name, "a")) == NULL)
-	{
-		perror("Fail to fopen");
-		exit(EXIT_FAILURE);
-	}
-	fwrite(addr, length, 1, fp);
-	usleep(500);
-	fclose(fp);
-	return 0;
-}
+int process_image(void *addr, int length);
+int init_decoder(void);
+void destroy_decoder(void);
  
 int read_frame(int fd)
 {
@@ -333,9 +318,11 @@ void main(void)
 	int fd;
 	fd = open_camera();
 	init_camera(fd);
+    init_decoder();
 	start_capture(fd);
 	mainloop(fd);
 	stop_capture(fd);
+    destroy_decoder();
 	close_camera_device(fd);
 }
 
