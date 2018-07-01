@@ -36,25 +36,29 @@ VideoStreamDataInfo videoDataInfo;
 VConfig videoConfig;
 VideoPicture *videoPicture = NULL;
 struct ScMemOpsS* memops = NULL;
+extern uint8_t frameNum;
 
-
-static int dumpData( uint8_t *data, int len)
+static int dumpData(char* outputFile, uint8_t *data, int len)
 {
-    char path[1024] = "./jgl.yuv";
     FILE *fp;
-    fp = fopen(path, "a+");
+    printf("output file %s", outputFile);
+    fp = fopen(outputFile, "a");
 
     if(fp != NULL)
     {
-        printf("dump data '%d'", len);
+        if(frameNum%2)
+            printf("\rdump data %d ...", len);
+        else 
+            printf("\rdump data %d ......", len);
         fwrite(data, 1, len, fp);
         fclose(fp);
     }
     else
     {
-        printf("saving picture open file error, errno(%d)", errno);
+        printf("saving picture open file error, errno(%d)\n", errno);
         return -1;
     }
+
     return 0;
 }
 
@@ -77,7 +81,7 @@ int init_decoder(void)
     videoConfig.bScaleDownEn = 0;
     videoConfig.nHorizonScaleDownRatio = 0;
     videoConfig.nVerticalScaleDownRatio = 0;
-    videoConfig.eOutputPixelFormat =PIXEL_FORMAT_YUV_MB32_420;
+    videoConfig.eOutputPixelFormat =PIXEL_FORMAT_YV12;
     videoConfig.nDeInterlaceHoldingFrameBufferNum = 0;
     videoConfig.nDisplayHoldingFrameBufferNum = 0;
     videoConfig.nRotateHoldingFrameBufferNum = 0;
@@ -117,7 +121,7 @@ void destroy_decoder(void)
     
 }
 
-int process_image(void *addr, int length)
+int process_image(char* outputFile, void *addr, int length)
 {
     memset(outPtr, 0, videoInfo.nWidth * videoInfo.nHeight *3/ 2);
     struct timeval tv;
@@ -127,7 +131,7 @@ int process_image(void *addr, int length)
     videoDataInfo.nLength = length;
     videoDataInfo.nPts = (int64_t)(tv.tv_sec*1000000+tv.tv_usec/1000);
     Libve_dec2(&pVideo, addr, (void*)outPtr, &videoInfo, &videoDataInfo, &videoConfig);
-    dumpData(outPtr, videoInfo.nWidth * videoInfo.nHeight *3/ 2);
+    dumpData(outputFile, outPtr, videoInfo.nWidth * videoInfo.nHeight *3/ 2);
 
     return 0;
 }

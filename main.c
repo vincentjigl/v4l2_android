@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <stdlib.h>
+#include <getopt.h>
 #include <linux/types.h>
 #include <linux/videodev2.h>
 #include <malloc.h>
@@ -33,6 +34,8 @@ typedef struct{
  
 BUFTYPE *usr_buf;
 static unsigned int n_buffer = 0;
+uint8_t frameNum=0;
+char* path;
  
 /*set video capture ways(mmap)*/
 int init_mmap(int fd)
@@ -211,7 +214,7 @@ int start_capture(int fd)
 }
  
  
-int process_image(void *addr, int length);
+int process_image(char* outputFile, void *addr, int length);
 int init_decoder(void);
 void destroy_decoder(void);
  
@@ -232,7 +235,7 @@ int read_frame(int fd)
  
 	//read process space's data to a file
 	//process_image(usr_buf[buf.index].start, usr_buf[buf.index].length);
-	process_image(usr_buf[buf.index].start, buf.bytesused);
+	process_image(path, usr_buf[buf.index].start, buf.bytesused);
 	if(-1 == ioctl(fd, VIDIOC_QBUF,&buf))
 	{
 		perror("Fail to ioctl 'VIDIOC_QBUF'");
@@ -244,8 +247,7 @@ int read_frame(int fd)
  
 int mainloop(int fd)
 {
-	int count = 10;
-	while(count-- > 0)
+	while(frameNum-- > 0)
 	{
 		for(;;)
 		{
@@ -311,11 +313,108 @@ void close_camera_device(int fd)
 		exit(EXIT_FAILURE);
 	}
 }
- 
- 
-void main(void)
+
+void parseArgument(int argc, char **argv)
 {
+    const struct option long_opts[] = {
+        {"help", no_argument, NULL, 0 },
+        {"bitrate", required_argument, NULL, 1 },
+        {"compare", required_argument, NULL, 2 },
+        {"qpmin", required_argument, NULL, 3 },
+        {"qpmax", required_argument, NULL, 4 },
+        {"avc", no_argument, NULL, 5 },
+        {"sar", no_argument, NULL, 6 },
+        {"fixqp", no_argument, NULL, 7 },
+        {"iqp", required_argument, NULL, 8 },
+        {"pqp", required_argument, NULL, 9 },
+        {"sliceNum", required_argument, NULL, 10 },
+        {"intraPeriod", required_argument, NULL, 11 },
+        {"intraRefresh", no_argument, NULL, 12 },
+        {"blockNum", required_argument, NULL, 13 },
+        {"fast", no_argument, NULL, 14 },
+        {"super", no_argument, NULL, 15 },
+        {"vbv", required_argument, NULL, 16 },
+        {"hh", no_argument, NULL, 69},
+        {NULL, no_argument, NULL, 0 }
+    };
+
+    path = malloc(128*sizeof(char));
+    memset(path, 0, strlen(path));
+    strncpy(path, "./jgl.yuv", 7);
+
+    int long_index, i ;
+    int c;
+    while (1){
+	c = getopt_long_only(argc, argv, "b:s:i:d:c:n:f:o:", long_opts, &long_index);
+
+	if (c == -1)
+		break;
+
+        switch (c) {
+        case 69:
+        case 0:
+            //PrintDemoUsage();
+            exit(0);
+        case  'b':
+            break;
+        case  3:
+            break;
+        case  4:
+            break;
+        case  5:
+            break;
+        case  6:
+            break;
+        case  7:
+            break;
+        case  8:
+            break;
+        case  9:
+            break;
+        case  10:
+            break;
+        case  11:
+            break;
+        case  12:
+            break;
+        case  13:
+            break;
+        case  14:
+            break;
+        case  15:
+            break;
+        case  16:
+            break;
+        case  2:
+        case 's':
+            break;
+        case 'd':
+            break;
+        case 'c':
+            break;
+        case 'n':
+            frameNum = atoi(optarg);
+            break;
+        case 'f':
+            break;
+        case 'i':
+            break;
+        case 'o':
+            memset(path, 0, strlen(path));
+            strncpy(path, optarg, strlen(optarg));
+            break;
+
+	default:
+	    break;
+	}
+    }
+}
+
+int main(int argc, char **argv)
+{
+    parseArgument(argc, argv);
 	int fd;
+
 	fd = open_camera();
 	init_camera(fd);
     init_decoder();
@@ -324,5 +423,6 @@ void main(void)
 	stop_capture(fd);
     destroy_decoder();
 	close_camera_device(fd);
+    return 0;
 }
 
