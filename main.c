@@ -34,7 +34,6 @@ typedef struct{
 BUFTYPE *usr_buf;
 static unsigned int n_buffer = 0;
  
- 
 /*set video capture ways(mmap)*/
 int init_mmap(int fd)
 {
@@ -232,7 +231,8 @@ int read_frame(int fd)
 	assert(buf.index < n_buffer);
  
 	//read process space's data to a file
-	process_image(usr_buf[buf.index].start, usr_buf[buf.index].length);
+	//process_image(usr_buf[buf.index].start, usr_buf[buf.index].length);
+	process_image(usr_buf[buf.index].start, buf.bytesused);
 	if(-1 == ioctl(fd, VIDIOC_QBUF,&buf))
 	{
 		perror("Fail to ioctl 'VIDIOC_QBUF'");

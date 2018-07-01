@@ -13,7 +13,9 @@
 #include <cdx_log.h>
 #include <vdecoder.h>
 #include "memoryAdapter.h"
+#include "Libve_Decoder2.h"
 #include <errno.h>
+#include <sys/time.h>
 
 typedef struct VideoFrame
 {
@@ -27,14 +29,18 @@ typedef struct VideoFrame
     int32_t  mRotationAngle;   // rotation angle, clockwise
 }VideoFrame;
 
-VConfig vConfig;
+uint8_t *outPtr = NULL; 
 VideoDecoder *pVideo;
+VideoStreamInfo videoInfo;
+VideoStreamDataInfo videoDataInfo;
+VConfig videoConfig;
 VideoPicture *videoPicture = NULL;
 struct ScMemOpsS* memops = NULL;
 
 
-static int dumpData(char *path, uint8_t *data, int len)
+static int dumpData( uint8_t *data, int len)
 {
+    char path[1024] = "./jgl.yuv";
     FILE *fp;
     fp = fopen(path, "a+");
 
@@ -63,23 +69,23 @@ int init_decoder(void)
     }
     CdcMemOpen(memops);
 
-    memset(&vConfig, 0x00, sizeof(VConfig));
-    vConfig.bDisable3D = 0;
-    vConfig.bDispErrorFrame = 0;
-    vConfig.bNoBFrames = 0;
-    vConfig.bRotationEn = 0;
-    vConfig.bScaleDownEn = 0;
-    vConfig.nHorizonScaleDownRatio = 0;
-    vConfig.nVerticalScaleDownRatio = 0;
-    vConfig.eOutputPixelFormat =PIXEL_FORMAT_YUV_MB32_420;
-    vConfig.nDeInterlaceHoldingFrameBufferNum = 0;
-    vConfig.nDisplayHoldingFrameBufferNum = 0;
-    vConfig.nRotateHoldingFrameBufferNum = 0;
-    vConfig.nDecodeSmoothFrameBufferNum = 0;
-    vConfig.nVbvBufferSize = 2*1024*1024;
-    vConfig.bThumbnailMode = 1;
-    vConfig.memops = memops;
-    VideoStreamInfo videoInfo;
+    memset(&videoConfig, 0x00, sizeof(VConfig));
+    videoConfig.bDisable3D = 0;
+    videoConfig.bDispErrorFrame = 0;
+    videoConfig.bNoBFrames = 0;
+    videoConfig.bRotationEn = 0;
+    videoConfig.bScaleDownEn = 0;
+    videoConfig.nHorizonScaleDownRatio = 0;
+    videoConfig.nVerticalScaleDownRatio = 0;
+    videoConfig.eOutputPixelFormat =PIXEL_FORMAT_YUV_MB32_420;
+    videoConfig.nDeInterlaceHoldingFrameBufferNum = 0;
+    videoConfig.nDisplayHoldingFrameBufferNum = 0;
+    videoConfig.nRotateHoldingFrameBufferNum = 0;
+    videoConfig.nDecodeSmoothFrameBufferNum = 0;
+    videoConfig.nVbvBufferSize = 2*1024*1024;
+    videoConfig.bThumbnailMode = 1;
+    videoConfig.memops = memops;
+
     memset(&videoInfo, 0x00, sizeof(VideoStreamInfo));
     videoInfo.eCodecFormat = VIDEO_CODEC_FORMAT_MJPEG;
     videoInfo.nWidth = 640;
@@ -91,17 +97,13 @@ int init_decoder(void)
     videoInfo.nCodecSpecificDataLen = 0;
     videoInfo.pCodecSpecificData = NULL;
 
-    pVideo = CreateVideoDecoder();
+    memset(&videoDataInfo, 0, sizeof(VideoStreamDataInfo));
+    outPtr = malloc(videoInfo.nWidth * videoInfo.nHeight *3/ 2);
+
+    Libve_init2(&pVideo, &videoInfo, &videoConfig);
     if(!pVideo)
     {
         printf("create video decoder failed\n");
-        return 0;
-    }
-    printf("create video decoder ok\n");
-
-    if ((InitializeVideoDecoder(pVideo, &videoInfo, &vConfig)) != 0)
-    {
-        printf("open dev failed,  decode error !\n");
         return 0;
     }
     printf("Initialize video decoder ok\n");
@@ -111,122 +113,21 @@ int init_decoder(void)
 
 void destroy_decoder(void)
 {
+    Libve_exit2(&pVideo);
     
-    CdcMemClose(memops);
 }
 
 int process_image(void *addr, int length)
 {
-    int ret;
-    char *buf, *ringBuf;
-    int buflen, ringBufLen;
-    char*jpegData=addr; 
-    int dataLen = length;
+    memset(outPtr, 0, videoInfo.nWidth * videoInfo.nHeight *3/ 2);
+    struct timeval tv;
+    struct timezone tz;
+    gettimeofday(&tv, &tz);
 
-    if(RequestVideoStreamBuffer(pVideo,
-                                dataLen,
-                                (char**)&buf,
-                                &buflen,
-                                (char**)&ringBuf,
-                                &ringBufLen,
-                                0))
-    {
-        printf("Request Video Stream Buffer failed\n");
-        return 0;
-    }
-    printf("Request Video Stream Buffer ok\n");
-
-    if(buflen + ringBufLen < dataLen)
-    {
-        printf("#####Error: request buffer failed, buffer is not enough\n");
-        return 0;
-    }
-
-    printf("goto to copy Video Stream Data ok!\n");
-    // copy stream to video decoder SBM
-    if(buflen >= dataLen)
-    {
-        memcpy(buf,jpegData,dataLen);
-    }
-    else
-    {
-        memcpy(buf,jpegData,buflen);
-        memcpy(ringBuf,jpegData+buflen,dataLen-buflen);
-    }
-    printf("Copy Video Stream Data ok!\n");
-
-    VideoStreamDataInfo DataInfo;
-    memset(&DataInfo, 0, sizeof(DataInfo));
-    DataInfo.pData = buf;
-    DataInfo.nLength = dataLen;
-    DataInfo.bIsFirstPart = 1;
-    DataInfo.bIsLastPart = 1;
-
-    if (SubmitVideoStreamData(pVideo, &DataInfo, 0))
-    {
-        printf("#####Error: Submit Video Stream Data failed!\n");
-        return 0;
-    }
-    printf("Submit Video Stream Data ok!\n");
-
-    // step : decode stream now
-    int endofstream = 0;
-    int dropBFrameifdelay = 0;
-    int64_t currenttimeus = 0;
-    int decodekeyframeonly = 1;
-
-   ret = DecodeVideoStream(pVideo, endofstream, decodekeyframeonly,
-                        dropBFrameifdelay, currenttimeus);
-    printf("decoder ret is %d \n",ret);
-    switch (ret)
-    {
-        case VDECODE_RESULT_KEYFRAME_DECODED:
-        case VDECODE_RESULT_FRAME_DECODED:
-        case VDECODE_RESULT_NO_FRAME_BUFFER:
-        {
-            ret = ValidPictureNum(pVideo, 0);
-            if (ret>= 0)
-            {
-                videoPicture = RequestPicture(pVideo, 0);
-                if (videoPicture == NULL){
-                    printf("decoder fail \n");
-                    return 0;
-                }
-                printf("decoder one pic...\n");
-                printf("pic nWidth is %d,nHeight is %d\n",videoPicture->nWidth,videoPicture->nHeight);
-
-                VideoFrame jpegData;
-                jpegData.mWidth = videoPicture->nWidth;
-                jpegData.mHeight = videoPicture->nHeight;
-                jpegData.mSize = jpegData.mWidth*jpegData.mWidth*3/2;
-                jpegData.mData = (unsigned char*)malloc(jpegData.mSize);
-                if(jpegData.mData == NULL)
-                {
-                    return -1;
-                }
-
-                //char path[1024] = "./pic.rgb";
-                char path[1024] = "./jgl.yuv";
-                dumpData(path, (uint8_t *)jpegData.mData, jpegData.mWidth * jpegData.mHeight *3/ 2);
-                sync();
-            }
-            else
-            {
-               printf("no ValidPictureNum ret is %d",ret);
-            }
-
-            break;
-        }
-
-        case VDECODE_RESULT_OK:
-        case VDECODE_RESULT_CONTINUE:
-        case VDECODE_RESULT_NO_BITSTREAM:
-        case VDECODE_RESULT_RESOLUTION_CHANGE:
-        case VDECODE_RESULT_UNSUPPORTED:
-        default:
-            printf("video decode Error: %d!\n", ret);
-            return 0;
-    }
+    videoDataInfo.nLength = length;
+    videoDataInfo.nPts = (int64_t)(tv.tv_sec*1000000+tv.tv_usec/1000);
+    Libve_dec2(&pVideo, addr, (void*)outPtr, &videoInfo, &videoDataInfo, &videoConfig);
+    dumpData(outPtr, videoInfo.nWidth * videoInfo.nHeight *3/ 2);
 
     return 0;
 }

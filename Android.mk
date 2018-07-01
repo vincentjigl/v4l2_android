@@ -4,7 +4,7 @@ include $(CLEAR_VARS)
 TARGET_PATH=$(TOP)/frameworks/av/media/libcedarx/demo/demoVencoder
 LOCAL_MODULE_TAGS := optional
 
-LOCAL_SRC_FILES:= main.c mjpeg.c
+LOCAL_SRC_FILES:= main.c mjpeg.c Libve_Decoder2.c
 
 LOCAL_C_INCLUDES := \
 	$(TARGET_PATH) \
@@ -14,6 +14,7 @@ LOCAL_C_INCLUDES := \
 	$(TARGET_PATH)/../../libcore/playback/include  \
 	$(TARGET_PATH)/../../external/include/adecoder \
 	$(TOP)/frameworks/av/media/libcedarc/include \
+	$(TOP)/hardware/aw/camera
 
 
 LOCAL_SHARED_LIBRARIES := \
